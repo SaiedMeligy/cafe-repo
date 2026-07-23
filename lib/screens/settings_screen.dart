@@ -226,6 +226,7 @@ class _DeviceDialogState extends ConsumerState<DeviceDialog> {
   late String type;
   late double hourlyRate;
   late double? matchRate;
+  late double? multiplayerMatchRate;
   late double? multiplayerHourlyRate;
 
   @override
@@ -235,6 +236,7 @@ class _DeviceDialogState extends ConsumerState<DeviceDialog> {
     type = widget.device?.type ?? 'Billiards';
     hourlyRate = widget.device?.hourlyRate ?? 0.0;
     matchRate = widget.device?.matchRate;
+    multiplayerMatchRate = widget.device?.multiplayerMatchRate;
     multiplayerHourlyRate = widget.device?.multiplayerHourlyRate;
   }
 
@@ -287,6 +289,12 @@ class _DeviceDialogState extends ConsumerState<DeviceDialog> {
                 keyboardType: TextInputType.number,
                 onSaved: (val) => matchRate = val != null && val.isNotEmpty ? double.tryParse(val) : null,
               ),
+              TextFormField(
+                initialValue: multiplayerMatchRate?.toString() ?? '',
+                decoration: const InputDecoration(labelText: 'سعر الجيم زوجي (إن وجد)'),
+                keyboardType: TextInputType.number,
+                onSaved: (val) => multiplayerMatchRate = val != null && val.isNotEmpty ? double.tryParse(val) : null,
+              ),
             ],
           ),
         ),
@@ -304,6 +312,7 @@ class _DeviceDialogState extends ConsumerState<DeviceDialog> {
                 ..type = type
                 ..hourlyRate = hourlyRate
                 ..matchRate = matchRate
+                ..multiplayerMatchRate = multiplayerMatchRate
                 ..multiplayerHourlyRate = multiplayerHourlyRate;
               await ref.read(databaseServiceProvider).saveDevice(device);
               if (mounted) Navigator.pop(context);

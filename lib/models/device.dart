@@ -20,6 +20,9 @@ class Device {
   /// Fixed price per match (if applicable)
   double? matchRate;
 
+  /// Fixed price per match for multiplayer (if applicable)
+  double? multiplayerMatchRate;
+
   /// Is it currently active
   bool isActive = true;
 }

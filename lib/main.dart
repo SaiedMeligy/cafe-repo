@@ -10,6 +10,7 @@ import 'models/device.dart';
 import 'models/product.dart';
 import 'models/session.dart';
 import 'models/daily_report.dart';
+import 'models/direct_cart_item.dart';
 import 'screens/dashboard_screen.dart';
 
 import 'services/database_service.dart';
@@ -21,7 +22,7 @@ void main() async {
   // Initialize Isar
   final dir = await getApplicationDocumentsDirectory();
   final isar = await Isar.open(
-    [DeviceSchema, ProductSchema, PlaySessionSchema, DailyReportSchema],
+    [DeviceSchema, ProductSchema, PlaySessionSchema, DailyReportSchema, DirectCartItemSchema],
     directory: dir.path,
   );
   

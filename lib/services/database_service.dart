@@ -2,6 +2,7 @@ import 'package:isar/isar.dart';
 import '../models/device.dart';
 import '../models/product.dart';
 import '../models/session.dart';
+import '../models/direct_cart_item.dart';
 
 class DatabaseService {
   final Isar isar;
@@ -99,18 +100,44 @@ class DatabaseService {
     await isar.writeTxn(() async {
       await isar.playSessions.put(session);
       await session.device.save();
-      
-      // Deduct stock for products ordered
-      for (var order in session.orders) {
-        final product = await isar.products.get(order.productId);
-        if (product != null) {
-          product.stockCount -= order.quantity;
-          if (product.stockCount < 0) product.stockCount = 0;
-          await isar.products.put(product);
-        }
+    });
+  }
+
+  Future<void> adjustProductStock(int productId, int amount) async {
+    await isar.writeTxn(() async {
+      final product = await isar.products.get(productId);
+      if (product != null) {
+        product.stockCount += amount;
+        if (product.stockCount < 0) product.stockCount = 0;
+        await isar.products.put(product);
       }
     });
   }
+
+  // --- Direct Cart ---
+  Stream<List<DirectCartItem>> watchDirectCart() {
+    return isar.directCartItems.where().watch(fireImmediately: true);
+  }
+
+  Future<void> saveDirectCartItem(DirectCartItem item) async {
+    await isar.writeTxn(() async {
+      await isar.directCartItems.put(item);
+    });
+  }
+
+  Future<void> deleteDirectCartItem(int id) async {
+    await isar.writeTxn(() async {
+      await isar.directCartItems.delete(id);
+    });
+  }
+
+  Future<void> clearDirectCart() async {
+    await isar.writeTxn(() async {
+      await isar.directCartItems.clear();
+    });
+  }
+
+
 
   Future<void> clearHistory({String? category}) async {
     await isar.writeTxn(() async {

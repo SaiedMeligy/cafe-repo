@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -5,19 +7,72 @@ import '../providers/providers.dart';
 import '../models/device.dart';
 import '../models/session.dart';
 import '../models/product.dart';
+import '../models/direct_cart_item.dart';
 import 'settings_screen.dart';
 import 'reports_screen.dart';
 import 'session_screen.dart';
 
-class DashboardScreen extends StatefulWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _selectedIndex = 0;
+  Timer? _alarmTimer;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  final Set<int> _alarmedSessions = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _startAlarmTimer();
+  }
+
+  @override
+  void dispose() {
+    _alarmTimer?.cancel();
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  void _startAlarmTimer() {
+    _alarmTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      final sessionsAsync = ref.read(activeSessionsProvider);
+      if (sessionsAsync is AsyncData) {
+        final sessions = sessionsAsync.value ?? [];
+        bool shouldAlarm = false;
+        
+        for (final session in sessions) {
+          if (session.expectedDurationMinutes != null) {
+            final elapsed = DateTime.now().difference(session.startTime).inMinutes;
+            if (elapsed >= session.expectedDurationMinutes!) {
+              if (!_alarmedSessions.contains(session.id)) {
+                _alarmedSessions.add(session.id);
+                shouldAlarm = true;
+                
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('انتهى الوقت لجهاز: ${session.device.value?.name ?? "غير معروف"}!', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 10),
+                    )
+                  );
+                }
+              }
+            }
+          }
+        }
+        
+        if (shouldAlarm) {
+          await _audioPlayer.play(AssetSource('audio/alarm.wav'));
+        }
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,22 +148,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildContent() {
-    switch (_selectedIndex) {
-      case 0:
-        return const DevicesView(deviceCategory: 'Billiards');
-      case 1:
-        return const DevicesView(deviceCategory: 'Ping Pong');
-      case 2:
-        return const DevicesView(deviceCategory: 'PS');
-      case 3:
-        return const ProductsView();
-      case 4:
-        return const ReportsScreen();
-      case 5:
-        return const SettingsScreen();
-      default:
-        return const Center(child: Text('Not Implemented'));
-    }
+    return IndexedStack(
+      index: _selectedIndex,
+      children: const [
+        DevicesView(deviceCategory: 'Billiards'),
+        DevicesView(deviceCategory: 'Ping Pong'),
+        DevicesView(deviceCategory: 'PS'),
+        ProductsView(),
+        ReportsScreen(),
+        SettingsScreen(),
+      ],
+    );
   }
 }
 
@@ -139,7 +189,7 @@ class DevicesView extends ConsumerWidget {
             flex: 3,
             child: devicesAsync.when(
               data: (devices) {
-                final filteredDevices = devices.where((d) => d.type.startsWith(deviceCategory)).toList();
+                final filteredDevices = devices.where((d) => d.type.startsWith(deviceCategory) && d.name != 'بلياردو 2').toList();
                 
                 if (filteredDevices.isEmpty) {
                   return const Center(child: Text('لا يوجد أجهزة في هذا القسم.'));
@@ -342,11 +392,13 @@ class _CategoryHistoryTableState extends ConsumerState<CategoryHistoryTable> {
                 return LayoutBuilder(
                   builder: (context, constraints) {
                     return SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                        child: DataTable(
-                          headingRowColor: MaterialStateProperty.all(const Color(0xFF1E1E1E)),
+                      scrollDirection: Axis.vertical,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                          child: DataTable(
+                            headingRowColor: MaterialStateProperty.all(const Color(0xFF1E1E1E)),
                           columns: const [
                       DataColumn(label: Text('الجهاز')),
                       DataColumn(label: Text('البداية')),
@@ -438,10 +490,11 @@ class _CategoryHistoryTableState extends ConsumerState<CategoryHistoryTable> {
                             const DataCell(Text('')),
                           ],
                         ),
-                      ),
-                  ),
-                ),
-              );
+                      ), // add
+                    ), // DataTable
+                  ), // ConstrainedBox
+                ), // SingleChildScrollView horizontal
+              ); // SingleChildScrollView vertical
             }
           );
         },
@@ -455,11 +508,153 @@ class _CategoryHistoryTableState extends ConsumerState<CategoryHistoryTable> {
   }
 }
 
-class ProductsView extends ConsumerWidget {
+class ProductsView extends ConsumerStatefulWidget {
   const ProductsView({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProductsView> createState() => _ProductsViewState();
+}
+
+class _ProductsViewState extends ConsumerState<ProductsView> {
+
+  void _addToCart(Product product) async {
+    final cartAsync = ref.read(directCartProvider);
+    final cart = cartAsync.value ?? [];
+    final db = ref.read(databaseServiceProvider);
+    
+    await db.adjustProductStock(product.id, -1);
+    
+    final existingIndex = cart.indexWhere((o) => o.productId == product.id);
+    if (existingIndex >= 0) {
+      final existingItem = cart[existingIndex];
+      existingItem.quantity++;
+      await db.saveDirectCartItem(existingItem);
+    } else {
+      final newItem = DirectCartItem()
+        ..productId = product.id
+        ..productName = product.name
+        ..price = product.price
+        ..costPrice = product.costPrice
+        ..quantity = 1;
+      await db.saveDirectCartItem(newItem);
+    }
+  }
+
+  void _removeFromCart(int index) async {
+    final cartAsync = ref.read(directCartProvider);
+    final cart = cartAsync.value ?? [];
+    if (index >= cart.length) return;
+    
+    final db = ref.read(databaseServiceProvider);
+    final item = cart[index];
+    
+    await db.adjustProductStock(item.productId, 1);
+    
+    if (item.quantity > 1) {
+      item.quantity--;
+      await db.saveDirectCartItem(item);
+    } else {
+      await db.deleteDirectCartItem(item.id);
+    }
+  }
+
+  Future<void> _checkout() async {
+    final cartAsync = ref.read(directCartProvider);
+    final cart = cartAsync.value ?? [];
+    if (cart.isEmpty) return;
+    
+    final db = ref.read(databaseServiceProvider);
+    
+    final sessionOrders = cart.map((item) => SessionOrder()
+      ..productId = item.productId
+      ..productName = item.productName
+      ..price = item.price
+      ..costPrice = item.costPrice
+      ..quantity = item.quantity
+    ).toList();
+    
+    final session = PlaySession()
+      ..startTime = DateTime.now()
+      ..endTime = DateTime.now()
+      ..isCompleted = true
+      ..paymentStatus = 'Paid'
+      ..orders = sessionOrders
+      ..totalTimePrice = 0
+      ..totalOrdersPrice = cart.fold(0.0, (sum, item) => sum + item.total);
+      
+    await db.completeSession(session);
+    
+    await db.clearDirectCart();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم بيع الطلبات بنجاح')));
+    }
+  }
+
+  Widget _buildCart() {
+    final cartAsync = ref.watch(directCartProvider);
+    final cart = cartAsync.value ?? [];
+    final double total = cart.fold(0.0, (sum, item) => sum + item.total);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: const Color(0xFF1A1A1A),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('طلبات مباشرة (تيك أواي)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFFFFD700))),
+          const SizedBox(height: 16),
+          Expanded(
+            child: cart.isEmpty 
+              ? const Center(child: Text('لا توجد طلبات', style: TextStyle(color: Colors.white54)))
+              : ListView.builder(
+                  itemCount: cart.length,
+                  itemBuilder: (context, index) {
+                    final order = cart[index];
+                    return ListTile(
+                      title: Text(order.productName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      subtitle: Text('${order.price} EGP x ${order.quantity}', style: const TextStyle(fontSize: 16)),
+                      trailing: SizedBox(
+                        width: 120,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Expanded(child: Text('${order.total} EGP', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.greenAccent), overflow: TextOverflow.ellipsis)),
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
+                              onPressed: () => _removeFromCart(index),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+          ),
+          const Divider(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('الإجمالي:', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              Text('${total.toStringAsFixed(1)} جنيه', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              minimumSize: const Size(double.infinity, 50),
+            ),
+            onPressed: cart.isEmpty ? null : _checkout,
+            icon: const Icon(Icons.check_circle),
+            label: const Text('دفع وإنهاء', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final productsAsync = ref.watch(productsProvider);
     
     return Scaffold(
@@ -469,15 +664,19 @@ class ProductsView extends ConsumerWidget {
         elevation: 0,
         title: const Text('المشاريب والأصناف (المخزون)'),
       ),
-      body: Column(
+      body: Row(
         children: [
           Expanded(
             flex: 3,
-            child: productsAsync.when(
-              data: (products) {
-                if (products.isEmpty) {
-                  return const Center(child: Text('لا يوجد أصناف.'));
-                }
+            child: Column(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: productsAsync.when(
+                    data: (products) {
+                      if (products.isEmpty) {
+                        return const Center(child: Text('لا يوجد أصناف.'));
+                      }
 
                 return GridView.builder(
                   padding: const EdgeInsets.all(24),
@@ -490,31 +689,34 @@ class ProductsView extends ConsumerWidget {
                   itemCount: products.length,
                   itemBuilder: (context, index) {
                     final product = products[index];
-                    return Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: Container(
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  image: const DecorationImage(
-                                    image: AssetImage('assets/images/drinks.jpg'),
-                                    fit: BoxFit.cover,
+                    return InkWell(
+                      onTap: () => _addToCart(product),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    image: const DecorationImage(
+                                      image: AssetImage('assets/images/drinks.jpg'),
+                                      fit: BoxFit.cover,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(product.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-                            const SizedBox(height: 8),
-                            Text('${product.price} جنيه', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 16, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text('المخزون: ${product.stockCount}', style: const TextStyle(color: Colors.white70)),
-                          ],
+                              const SizedBox(height: 8),
+                              Text(product.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+                              const SizedBox(height: 8),
+                              Text('${product.price} جنيه', style: const TextStyle(color: Color(0xFFFFD700), fontSize: 16, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Text('المخزون: ${product.stockCount}', style: const TextStyle(color: Colors.white70)),
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -532,6 +734,14 @@ class ProductsView extends ConsumerWidget {
           )
         ],
       ),
+    ),
+    const VerticalDivider(width: 1, color: Colors.white24),
+    Expanded(
+      flex: 1,
+      child: _buildCart(),
+    ),
+  ],
+),
     );
   }
 }
@@ -565,11 +775,13 @@ class ProductsHistoryTable extends ConsumerWidget {
                 return LayoutBuilder(
                   builder: (context, constraints) {
                     return SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                        child: DataTable(
-                          headingRowColor: MaterialStateProperty.all(const Color(0xFF1E1E1E)),
+                      scrollDirection: Axis.vertical,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                          child: DataTable(
+                            headingRowColor: MaterialStateProperty.all(const Color(0xFF1E1E1E)),
                           columns: const [
                             DataColumn(label: Text('الجهاز / الطلب')),
                             DataColumn(label: Text('الأصناف')),
@@ -603,13 +815,14 @@ class ProductsHistoryTable extends ConsumerWidget {
                                     style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFFFD700)),
                                   )),
                                 ],
-                              ),
-                            ),
-                        ),
-                      ),
-                    );
-                  }
-                );
+                               ),
+                             ),
+                           ),
+                         ),
+                       ),
+                     );
+                   }
+                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, stack) => Center(child: Text('Error: $err')),

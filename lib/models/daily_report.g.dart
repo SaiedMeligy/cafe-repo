@@ -15,7 +15,7 @@ extension GetDailyReportCollection on Isar {
 
 const DailyReportSchema = CollectionSchema(
   name: r'DailyReport',
-  id: -361125306726995,
+  id: -3611253067269952573,
   properties: {
     r'date': PropertySchema(
       id: 0,

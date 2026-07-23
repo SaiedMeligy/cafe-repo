@@ -15,7 +15,7 @@ extension GetDeviceCollection on Isar {
 
 const DeviceSchema = CollectionSchema(
   name: r'Device',
-  id: 349143051466329,
+  id: 3491430514663294648,
   properties: {
     r'hourlyRate': PropertySchema(
       id: 0,
@@ -37,13 +37,18 @@ const DeviceSchema = CollectionSchema(
       name: r'multiplayerHourlyRate',
       type: IsarType.double,
     ),
-    r'name': PropertySchema(
+    r'multiplayerMatchRate': PropertySchema(
       id: 4,
+      name: r'multiplayerMatchRate',
+      type: IsarType.double,
+    ),
+    r'name': PropertySchema(
+      id: 5,
       name: r'name',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'type',
       type: IsarType.string,
     )
@@ -83,8 +88,9 @@ void _deviceSerialize(
   writer.writeBool(offsets[1], object.isActive);
   writer.writeDouble(offsets[2], object.matchRate);
   writer.writeDouble(offsets[3], object.multiplayerHourlyRate);
-  writer.writeString(offsets[4], object.name);
-  writer.writeString(offsets[5], object.type);
+  writer.writeDouble(offsets[4], object.multiplayerMatchRate);
+  writer.writeString(offsets[5], object.name);
+  writer.writeString(offsets[6], object.type);
 }
 
 Device _deviceDeserialize(
@@ -99,8 +105,9 @@ Device _deviceDeserialize(
   object.isActive = reader.readBool(offsets[1]);
   object.matchRate = reader.readDoubleOrNull(offsets[2]);
   object.multiplayerHourlyRate = reader.readDoubleOrNull(offsets[3]);
-  object.name = reader.readString(offsets[4]);
-  object.type = reader.readString(offsets[5]);
+  object.multiplayerMatchRate = reader.readDoubleOrNull(offsets[4]);
+  object.name = reader.readString(offsets[5]);
+  object.type = reader.readString(offsets[6]);
   return object;
 }
 
@@ -120,8 +127,10 @@ P _deviceDeserializeProp<P>(
     case 3:
       return (reader.readDoubleOrNull(offset)) as P;
     case 4:
-      return (reader.readString(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 5:
+      return (reader.readString(offset)) as P;
+    case 6:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -502,6 +511,90 @@ extension DeviceQueryFilter on QueryBuilder<Device, Device, QFilterCondition> {
     });
   }
 
+  QueryBuilder<Device, Device, QAfterFilterCondition>
+      multiplayerMatchRateIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'multiplayerMatchRate',
+      ));
+    });
+  }
+
+  QueryBuilder<Device, Device, QAfterFilterCondition>
+      multiplayerMatchRateIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'multiplayerMatchRate',
+      ));
+    });
+  }
+
+  QueryBuilder<Device, Device, QAfterFilterCondition>
+      multiplayerMatchRateEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'multiplayerMatchRate',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Device, Device, QAfterFilterCondition>
+      multiplayerMatchRateGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'multiplayerMatchRate',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Device, Device, QAfterFilterCondition>
+      multiplayerMatchRateLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'multiplayerMatchRate',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Device, Device, QAfterFilterCondition>
+      multiplayerMatchRateBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'multiplayerMatchRate',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
   QueryBuilder<Device, Device, QAfterFilterCondition> nameEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -814,6 +907,18 @@ extension DeviceQuerySortBy on QueryBuilder<Device, Device, QSortBy> {
     });
   }
 
+  QueryBuilder<Device, Device, QAfterSortBy> sortByMultiplayerMatchRate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'multiplayerMatchRate', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Device, Device, QAfterSortBy> sortByMultiplayerMatchRateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'multiplayerMatchRate', Sort.desc);
+    });
+  }
+
   QueryBuilder<Device, Device, QAfterSortBy> sortByName() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.asc);
@@ -900,6 +1005,18 @@ extension DeviceQuerySortThenBy on QueryBuilder<Device, Device, QSortThenBy> {
     });
   }
 
+  QueryBuilder<Device, Device, QAfterSortBy> thenByMultiplayerMatchRate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'multiplayerMatchRate', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Device, Device, QAfterSortBy> thenByMultiplayerMatchRateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'multiplayerMatchRate', Sort.desc);
+    });
+  }
+
   QueryBuilder<Device, Device, QAfterSortBy> thenByName() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.asc);
@@ -950,6 +1067,12 @@ extension DeviceQueryWhereDistinct on QueryBuilder<Device, Device, QDistinct> {
     });
   }
 
+  QueryBuilder<Device, Device, QDistinct> distinctByMultiplayerMatchRate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'multiplayerMatchRate');
+    });
+  }
+
   QueryBuilder<Device, Device, QDistinct> distinctByName(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -994,6 +1117,13 @@ extension DeviceQueryProperty on QueryBuilder<Device, Device, QQueryProperty> {
       multiplayerHourlyRateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'multiplayerHourlyRate');
+    });
+  }
+
+  QueryBuilder<Device, double?, QQueryOperations>
+      multiplayerMatchRateProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'multiplayerMatchRate');
     });
   }
 

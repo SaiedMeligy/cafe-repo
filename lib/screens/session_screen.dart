@@ -72,7 +72,8 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
       final rate = _session.isMultiplayer ? (widget.device.multiplayerHourlyRate ?? widget.device.hourlyRate) : widget.device.hourlyRate;
       _session.totalTimePrice = hours * rate;
     } else {
-      _session.totalTimePrice = (_session.matchesCount * (widget.device.matchRate ?? 0)).toDouble();
+      final matchRate = _session.isMultiplayer ? (widget.device.multiplayerMatchRate ?? widget.device.matchRate ?? 0) : (widget.device.matchRate ?? 0);
+      _session.totalTimePrice = (_session.matchesCount * matchRate).toDouble();
     }
 
     // Calculate orders price
@@ -87,22 +88,23 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
 
   void _addProduct(Product product) async {
     setState(() {
-      final existingIndex = _session.orders.indexWhere((o) => o.productId == product.id);
+      final newOrders = List<SessionOrder>.from(_session.orders);
+      final existingIndex = newOrders.indexWhere((o) => o.productId == product.id);
       if (existingIndex >= 0) {
-        _session.orders[existingIndex].quantity += 1;
+        newOrders[existingIndex].quantity++;
       } else {
-        _session.orders.add(SessionOrder()
+        newOrders.add(SessionOrder()
           ..productId = product.id
           ..productName = product.name
           ..price = product.price
           ..costPrice = product.costPrice
           ..quantity = 1);
       }
+      _session.orders = newOrders;
     });
-    
-    if (_session.id != Isar.autoIncrement) {
-      await ref.read(databaseServiceProvider).saveSession(_session);
-    }
+    final db = ref.read(databaseServiceProvider);
+    await db.saveSession(_session);
+    await db.adjustProductStock(product.id, -1);
   }
 
   @override
@@ -192,12 +194,22 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                           Row(
                             children: [
                               const Text('المباريات: ', style: TextStyle(fontSize: 24)),
-                              IconButton(icon: const Icon(Icons.remove), onPressed: () => setState(() => _session.matchesCount = (_session.matchesCount > 0 ? _session.matchesCount - 1 : 0))),
+                              IconButton(icon: const Icon(Icons.remove), onPressed: () async {
+                                setState(() => _session.matchesCount = (_session.matchesCount > 0 ? _session.matchesCount - 1 : 0));
+                                if (_session.id != Isar.autoIncrement) {
+                                  await ref.read(databaseServiceProvider).saveSession(_session);
+                                }
+                              }),
                               Text('${_session.matchesCount}', style: const TextStyle(fontSize: 24)),
-                              IconButton(icon: const Icon(Icons.add), onPressed: () => setState(() => _session.matchesCount++)),
+                              IconButton(icon: const Icon(Icons.add), onPressed: () async {
+                                setState(() => _session.matchesCount++);
+                                if (_session.id != Isar.autoIncrement) {
+                                  await ref.read(databaseServiceProvider).saveSession(_session);
+                                }
+                              }),
                             ],
                           ),
-                          Text('تكلفة المباريات: ${(_session.matchesCount * (widget.device.matchRate ?? 0)).toStringAsFixed(1)} جنيه', style: const TextStyle(fontSize: 18, color: Colors.greenAccent)),
+                          Text('تكلفة المباريات: ${(_session.matchesCount * (_session.isMultiplayer ? (widget.device.multiplayerMatchRate ?? widget.device.matchRate ?? 0) : (widget.device.matchRate ?? 0))).toStringAsFixed(1)} جنيه', style: const TextStyle(fontSize: 18, color: Colors.greenAccent)),
                         ],
                       ),
                     
@@ -215,22 +227,27 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                         itemBuilder: (context, index) {
                           final order = _session.orders[index];
                           return ListTile(
-                            title: Text(order.productName),
-                            subtitle: Text('${order.price} EGP x ${order.quantity}'),
+                            title: Text(order.productName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            subtitle: Text('${order.price} EGP x ${order.quantity}', style: const TextStyle(fontSize: 16)),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text('${order.total} EGP', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text('${order.total} EGP', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
                                 IconButton(
                                   icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
-                                  onPressed: () {
+                                  onPressed: () async {
                                     setState(() {
-                                      if (order.quantity > 1) {
-                                        order.quantity--;
+                                      final newOrders = List<SessionOrder>.from(_session.orders);
+                                      if (newOrders[index].quantity > 1) {
+                                        newOrders[index].quantity--;
                                       } else {
-                                        _session.orders.removeAt(index);
+                                        newOrders.removeAt(index);
                                       }
+                                      _session.orders = newOrders;
                                     });
+                                    final db = ref.read(databaseServiceProvider);
+                                    await db.saveSession(_session);
+                                    await db.adjustProductStock(order.productId, 1);
                                   },
                                 ),
                               ],
@@ -248,7 +265,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                         children: [
                           const Text('الإجمالي الكلي:', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                           Text(
-                            '${(_session.isMatchMode ? (_session.matchesCount * (widget.device.matchRate ?? 0)) : ((duration.inMinutes / 60) * currentRate) + _session.orders.fold(0.0, (sum, item) => sum + item.total)).toStringAsFixed(1)} جنيه',
+                            '${(_session.isMatchMode ? (_session.matchesCount * (_session.isMultiplayer ? (widget.device.multiplayerMatchRate ?? widget.device.matchRate ?? 0) : (widget.device.matchRate ?? 0))) : ((duration.inMinutes / 60) * currentRate) + _session.orders.fold(0.0, (sum, item) => sum + item.total)).toStringAsFixed(1)} جنيه',
                             style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFFFFD700))
                           ),
                         ],

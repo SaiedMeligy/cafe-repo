@@ -107,6 +107,34 @@ class ReportsScreen extends ConsumerWidget {
     final pdf = pw.Document();
     final font = await PdfGoogleFonts.cairoRegular();
 
+    Map<String, double> totals = {};
+    double ordersTotal = 0;
+    
+    for (var s in allSessions) {
+      String type = s.device.value?.type ?? 'أخرى';
+      String typeName = type;
+      if (type.toLowerCase().contains('billiard')) typeName = 'بلياردو';
+      else if (type.toLowerCase().contains('ping')) typeName = 'بنج بونج';
+      else if (type.toLowerCase().contains('ps') || type.toLowerCase().contains('playstation')) typeName = 'بلايستيشن';
+      
+      totals[typeName] = (totals[typeName] ?? 0) + s.totalTimePrice;
+      ordersTotal += s.totalOrdersPrice;
+    }
+
+    List<List<String>> data = [];
+    double grandTotal = 0;
+    totals.forEach((key, value) {
+      data.add([key, '${value.toStringAsFixed(1)} جنيه']);
+      grandTotal += value;
+    });
+    
+    data.add(['المشاريب والطلبات', '${ordersTotal.toStringAsFixed(1)} جنيه']);
+    grandTotal += ordersTotal;
+    
+    // Add empty row for spacing
+    data.add(['----------------', '----------------']);
+    data.add(['الإجمالي الكلي', '${grandTotal.toStringAsFixed(1)} جنيه']);
+
     pdf.addPage(
       pw.Page(
         theme: pw.ThemeData.withFont(base: font, bold: font),
@@ -115,20 +143,13 @@ class ReportsScreen extends ConsumerWidget {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text('مقهى الألعاب - تقرير يومي', style: pw.TextStyle(font: font, fontSize: 24, fontWeight: pw.FontWeight.bold)),
+              pw.Text('مقهى الألعاب - تقرير ملخص', style: pw.TextStyle(font: font, fontSize: 24, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 20),
               pw.TableHelper.fromTextArray(
-                headers: ['الجهاز', 'وقت البدء', 'وقت الانتهاء', 'الوقت', 'الطلبات', 'الإجمالي'],
-                data: allSessions.map((s) => [
-                  s.device.value?.name ?? 'غير معروف',
-                  s.startTime.toString().substring(11, 16),
-                  s.endTime != null ? s.endTime.toString().substring(11, 16) : 'شغال',
-                  s.totalTimePrice.toString(),
-                  s.totalOrdersPrice.toString(),
-                  s.grandTotal.toString()
-                ]).toList(),
-                headerStyle: pw.TextStyle(font: font, fontWeight: pw.FontWeight.bold),
-                cellStyle: pw.TextStyle(font: font),
+                headers: ['القسم', 'الإجمالي'],
+                data: data,
+                headerStyle: pw.TextStyle(font: font, fontWeight: pw.FontWeight.bold, fontSize: 18),
+                cellStyle: pw.TextStyle(font: font, fontSize: 16),
                 cellAlignment: pw.Alignment.centerRight,
               ),
             ],
