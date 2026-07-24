@@ -77,7 +77,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     }
 
     // Calculate orders price
-    _session.totalOrdersPrice = _session.orders.fold(0, (sum, item) => sum + item.total);
+    _session.totalOrdersPrice = _session.orders.fold(0.0, (sum, item) => sum + item.total);
 
     await db.completeSession(_session);
     
@@ -181,7 +181,16 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                             fontWeight: FontWeight.bold,
                             color: _session.expectedDurationMinutes != null && duration.inMinutes >= _session.expectedDurationMinutes! ? Colors.redAccent : Colors.white,
                           )),
-                          Text('تكلفة الوقت الحالي: ${((duration.inMinutes / 60) * currentRate).toStringAsFixed(1)} جنيه', style: const TextStyle(fontSize: 18, color: Colors.greenAccent)),
+                          Builder(
+                            builder: (context) {
+                              double billableMinutes = duration.inMinutes.toDouble();
+                              if (_session.expectedDurationMinutes != null && _session.expectedDurationMinutes! > duration.inMinutes) {
+                                billableMinutes = _session.expectedDurationMinutes!.toDouble();
+                              }
+                              final price = (billableMinutes / 60) * currentRate;
+                              return Text('تكلفة الوقت الحالي: ${price.toStringAsFixed(1)} جنيه', style: const TextStyle(fontSize: 18, color: Colors.greenAccent));
+                            }
+                          ),
                           if (_session.expectedDurationMinutes != null)
                             Text('المدة المحددة: ${_session.expectedDurationMinutes! >= 60 ? "${_session.expectedDurationMinutes! ~/ 60} ساعة" : ""} ${_session.expectedDurationMinutes! % 60 != 0 ? "${_session.expectedDurationMinutes! % 60} دقيقة" : ""}'.trim() + ' (${(_session.expectedDurationMinutes! / 60 * currentRate).toStringAsFixed(1)} جنيه)', 
                                 style: const TextStyle(fontSize: 18, color: Color(0xFFFFD700))),
@@ -264,9 +273,24 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('الإجمالي الكلي:', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                          Text(
-                            '${(_session.isMatchMode ? (_session.matchesCount * (_session.isMultiplayer ? (widget.device.multiplayerMatchRate ?? widget.device.matchRate ?? 0) : (widget.device.matchRate ?? 0))) : ((duration.inMinutes / 60) * currentRate) + _session.orders.fold(0.0, (sum, item) => sum + item.total)).toStringAsFixed(1)} جنيه',
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFFFFD700))
+                          Builder(
+                            builder: (context) {
+                              double timePrice = 0.0;
+                              if (_session.isMatchMode) {
+                                timePrice = (_session.matchesCount * (_session.isMultiplayer ? (widget.device.multiplayerMatchRate ?? widget.device.matchRate ?? 0) : (widget.device.matchRate ?? 0))).toDouble();
+                              } else {
+                                double billableMinutes = duration.inMinutes.toDouble();
+                                if (_session.expectedDurationMinutes != null && _session.expectedDurationMinutes! > duration.inMinutes) {
+                                  billableMinutes = _session.expectedDurationMinutes!.toDouble();
+                                }
+                                timePrice = (billableMinutes / 60.0) * currentRate;
+                              }
+                              final total = timePrice + _session.orders.fold(0.0, (sum, item) => sum + item.total);
+                              return Text(
+                                '${total.toStringAsFixed(1)} جنيه',
+                                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFFFFD700))
+                              );
+                            }
                           ),
                         ],
                       ),
@@ -280,21 +304,15 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                               backgroundColor: Colors.red,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                             ),
-                            onPressed: () => _endSession('Paid'),
+                            onPressed: () {
+                              if (_session.isMatchMode && _session.matchesCount == 0) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لا يمكن إنهاء الجلسة وعدد المباريات 0')));
+                                return;
+                              }
+                              _endSession('Paid');
+                            },
                             icon: const Icon(Icons.stop),
                             label: const Text('إنهاء ودفع', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            onPressed: () => _endSession('Deferred'),
-                            icon: const Icon(Icons.pause_circle_filled),
-                            label: const Text('إنهاء آجل', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                           ),
                         ),
                       ],

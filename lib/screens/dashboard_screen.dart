@@ -378,11 +378,9 @@ class _CategoryHistoryTableState extends ConsumerState<CategoryHistoryTable> {
                   final categoryMatch = s.device.value?.type.startsWith(widget.deviceCategory) ?? false;
                   if (!categoryMatch) return false;
                   if (_selectedDate == null) return true;
-                  final endDate = s.endTime;
-                  if (endDate == null) return false;
-                  return endDate.year == _selectedDate!.year &&
-                         endDate.month == _selectedDate!.month &&
-                         endDate.day == _selectedDate!.day;
+                  return s.startTime.year == _selectedDate!.year &&
+                         s.startTime.month == _selectedDate!.month &&
+                         s.startTime.day == _selectedDate!.day;
                 }).toList();
 
                 if (filtered.isEmpty) {
@@ -398,6 +396,10 @@ class _CategoryHistoryTableState extends ConsumerState<CategoryHistoryTable> {
                         child: ConstrainedBox(
                           constraints: BoxConstraints(minWidth: constraints.maxWidth),
                           child: DataTable(
+                            columnSpacing: 16,
+                            horizontalMargin: 12,
+                            dataTextStyle: const TextStyle(fontSize: 13, color: Colors.white),
+                            headingTextStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
                             headingRowColor: MaterialStateProperty.all(const Color(0xFF1E1E1E)),
                           columns: const [
                       DataColumn(label: Text('الجهاز')),
@@ -611,17 +613,20 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                   itemBuilder: (context, index) {
                     final order = cart[index];
                     return ListTile(
-                      title: Text(order.productName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      subtitle: Text('${order.price} EGP x ${order.quantity}', style: const TextStyle(fontSize: 16)),
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(order.productName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                      subtitle: Text('${order.price} EGP x ${order.quantity}', style: const TextStyle(fontSize: 12)),
                       trailing: SizedBox(
-                        width: 120,
+                        width: 90,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            Expanded(child: Text('${order.total} EGP', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.greenAccent), overflow: TextOverflow.ellipsis)),
+                            Expanded(child: Text('${order.total} EGP', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.greenAccent), overflow: TextOverflow.ellipsis)),
                             IconButton(
-                              icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
+                              icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20),
                               onPressed: () => _removeFromCart(index),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
                             ),
                           ],
                         ),
@@ -684,7 +689,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                     crossAxisCount: 5,
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
-                    childAspectRatio: 1.0,
+                    childAspectRatio: 0.75,
                   ),
                   itemCount: products.length,
                   itemBuilder: (context, index) {
@@ -746,11 +751,18 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
   }
 }
 
-class ProductsHistoryTable extends ConsumerWidget {
+class ProductsHistoryTable extends ConsumerStatefulWidget {
   const ProductsHistoryTable({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProductsHistoryTable> createState() => _ProductsHistoryTableState();
+}
+
+class _ProductsHistoryTableState extends ConsumerState<ProductsHistoryTable> {
+  DateTime _selectedDate = DateTime.now();
+
+  @override
+  Widget build(BuildContext context) {
     final completedSessionsAsync = ref.watch(completedSessionsProvider);
 
     return Container(
@@ -758,16 +770,44 @@ class ProductsHistoryTable extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'سجل مبيعات الأصناف من الجلسات',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFFFD700)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'سجل مبيعات الأصناف من الجلسات',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFFFD700)),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.calendar_today, color: Colors.white),
+                label: Text(
+                  DateFormat('yyyy-MM-dd').format(_selectedDate),
+                  style: const TextStyle(color: Colors.white),
+                ),
+                onPressed: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (date != null) {
+                    setState(() => _selectedDate = date);
+                  }
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Expanded(
             child: completedSessionsAsync.when(
               data: (sessions) {
-                // Filter sessions that have orders
-                final filtered = sessions.where((s) => s.orders.isNotEmpty).toList();
+                // Filter sessions that have orders AND match the selected date
+                final filtered = sessions.where((s) {
+                  if (s.orders.isEmpty) return false; // End time doesn't matter, we want everything with orders
+                  return s.startTime.year == _selectedDate.year &&
+                         s.startTime.month == _selectedDate.month &&
+                         s.startTime.day == _selectedDate.day;
+                }).toList();
                 if (filtered.isEmpty) {
                   return const Center(child: Text('لا توجد مبيعات أصناف سابقة اليوم.'));
                 }
@@ -781,6 +821,10 @@ class ProductsHistoryTable extends ConsumerWidget {
                         child: ConstrainedBox(
                           constraints: BoxConstraints(minWidth: constraints.maxWidth),
                           child: DataTable(
+                            columnSpacing: 16,
+                            horizontalMargin: 12,
+                            dataTextStyle: const TextStyle(fontSize: 13, color: Colors.white),
+                            headingTextStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
                             headingRowColor: MaterialStateProperty.all(const Color(0xFF1E1E1E)),
                           columns: const [
                             DataColumn(label: Text('الجهاز / الطلب')),
