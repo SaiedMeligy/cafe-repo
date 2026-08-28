@@ -15,7 +15,7 @@ extension GetPlaySessionCollection on Isar {
 
 const PlaySessionSchema = CollectionSchema(
   name: r'PlaySession',
-  id: -297187889808848330,
+  id: 187889808848330,
   properties: {
     r'endTime': PropertySchema(
       id: 0,
@@ -87,7 +87,7 @@ const PlaySessionSchema = CollectionSchema(
   indexes: {},
   links: {
     r'device': LinkSchema(
-      id: 3973980062768778685,
+      id: 980062768778685,
       name: r'device',
       target: r'Device',
       single: true,
@@ -1562,7 +1562,7 @@ extension PlaySessionQueryProperty
 
 const SessionOrderSchema = Schema(
   name: r'SessionOrder',
-  id: 330393008589478785,
+  id: 393008589478785,
   properties: {
     r'costPrice': PropertySchema(
       id: 0,

@@ -15,7 +15,7 @@ extension GetDirectCartItemCollection on Isar {
 
 const DirectCartItemSchema = CollectionSchema(
   name: r'DirectCartItem',
-  id: -5974720020177980270,
+  id: 720020177980270,
   properties: {
     r'costPrice': PropertySchema(
       id: 0,

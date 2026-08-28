@@ -11,6 +11,7 @@ import '../models/direct_cart_item.dart';
 import 'settings_screen.dart';
 import 'reports_screen.dart';
 import 'session_screen.dart';
+import 'inventory_report_dialog.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -668,6 +669,23 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
         backgroundColor: const Color(0xFF111111),
         elevation: 0,
         title: const Text('المشاريب والأصناف (المخزون)'),
+        actions: [
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF333333),
+              foregroundColor: const Color(0xFFFFD700),
+            ),
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => const InventoryReportDialog(),
+              );
+            },
+            icon: const Icon(Icons.inventory_2),
+            label: const Text('جرد المخزن', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 16),
+        ],
       ),
       body: Row(
         children: [

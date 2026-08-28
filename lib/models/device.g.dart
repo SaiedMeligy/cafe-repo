@@ -15,7 +15,7 @@ extension GetDeviceCollection on Isar {
 
 const DeviceSchema = CollectionSchema(
   name: r'Device',
-  id: 3491430514663294648,
+  id: 430514663294648,
   properties: {
     r'hourlyRate': PropertySchema(
       id: 0,
